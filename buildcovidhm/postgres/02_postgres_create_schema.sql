@@ -1,0 +1,1 @@
+ CREATE SCHEMA covidhm_24_04_2020;
