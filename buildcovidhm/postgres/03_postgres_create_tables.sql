@@ -9,7 +9,7 @@
 --------------------------------------------------------
 
 -- If running scripts individually, you can set the schema where all tables are created as follows:
--- SET search_path TO covid_dsl_v2; -- or your schema name
+SET search_path TO covid_dsl_v2; -- or your schema name
 
 --------------------------------------------------------
 --  DDL for Table patient
