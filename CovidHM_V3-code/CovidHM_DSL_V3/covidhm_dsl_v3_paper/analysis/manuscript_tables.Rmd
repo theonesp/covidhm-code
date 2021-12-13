@@ -1,0 +1,308 @@
+---
+title: "Code Used to create descriptive tables in the COVID DSL v3 manuscript"
+author: Miguel Ángel Armengol de la Hoz / Jesús Villar Fernández
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  html_notebook:
+    code_folding: hide
+    number_sections: yes
+    theme: flatly
+    toc: yes
+    toc_float: yes
+
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_file = paste0(substr(inputFile,1,nchar(inputFile)-4)," ",Sys.Date(),'.html')) })
+---
+
+# Environment
+
+## Libraries
+
+```{r message=FALSE, warning=FALSE}
+library(summarytools)
+library(RPostgreSQL)
+library(tidyverse)
+library(stringr)
+library(caret)
+library(tableone)
+library(hrbrthemes)
+library(plotly)
+library(readxl)
+library(xlsx)
+```
+
+## Database connection
+
+This notebook requires the database and schema available in the github [COVID HM Hospitales Code Repository](https://github.com/theonesp/covidhm-code/) to be be deployed to be able to run the following code.
+
+### Drivers
+
+```{r}
+#install.packages("RPostgreSQL")
+library(RPostgreSQL)
+
+# Load configuration settings
+dbdriver <- 'PostgreSQL'
+host  <- 'localhost'
+port  <- '45432'
+user  <- 'postgres'
+password <- 'Baba0805'
+dbname <- 'covidhm'
+schema <- 'covidhm_dsl_v3' #schema <- 'covid_dsl_v2'
+encoding  <- 'latin1'
+
+# Connect to the database using the configuration settings
+con <- dbConnect(dbDriver(dbdriver), dbname = dbname, host = host, port = port, 
+                 user = user, password = password)
+rm(password) # removes the password
+
+
+# Set the default schema
+dbExecute(con, paste("SET search_path TO ", schema, sep=" "))
+
+# WARNING: accents presents in the table need special encoding
+
+dbGetQuery(con, "SET client_encoding = 'LATIN1'")
+
+dbGetQuery(con, "SHOW CLIENT_ENCODING")
+```
+
+## Creating useful query functions
+
+```{r}
+# function avoiding add the connection data in each iteration
+run_query<-function(query){
+query_output<-dbGetQuery(con,query)
+  return(query_output)
+}
+
+# function for reading sql files
+getSQL <- function(filepath){
+  con = file(filepath, "r")
+  sql.string <- ""
+
+  while (TRUE){
+    line <- readLines(con, n = 1)
+
+    if ( length(line) == 0 ){
+      break
+    }
+
+    line <- gsub("\\t", " ", line)
+
+    if(grepl("--",line) == TRUE){
+      line <- paste(sub("--","/*",line),"*/")
+    }
+
+    sql.string <- paste(sql.string, line)
+  }
+
+  close(con)
+  return(sql.string)
+}
+```
+
+
+
+
+# Table 1
+
+Patient characteristics.
+
+## Data extraction
+
+```{r}
+patient<-run_query(getSQL('../sql/patient_v3.sql'))
+```
+
+## Table 1 generation
+
+Demographic table
+
+```{r}
+library(tableone)
+
+contvars<-c("age","admission_d_inpat","icu_date_in","icu_date_out","icu_days","discharge_date","admission_date_emerg","department_emerg","diag_emerg","temp_first_emerg","hr_first_emerg","glu_first_emerg","sat_02_first_emerg","bp_max_first_emerg","bp_min_first_emerg","hr_last_emerg","temp_last_emerg","glu_last_emerg","sat_02_last_emerg","bp_max_last_emerg","bp_min_last_emerg")
+
+catvars<-c("sex","diag_inpat","mechvent")
+
+allvars<-c(contvars,catvars)
+
+statifyby<-'destin_discharge'
+
+table1 <- CreateTableOne(vars = allvars, data = patient, factorVars = catvars)
+
+table1strat <- CreateTableOne(vars = allvars, data = patient, factorVars = catvars
+                         , testNormal=oneway.test 
+                         , strata = statifyby
+                         , smd = TRUE
+                         )
+
+table1_printed<-as.data.frame(print(table1
+                                    , nonnormal = c('age',"temp_first_emerg","hr_first_emerg","glu_first_emerg","sat_02_first_emerg","bp_max_first_emerg","bp_min_first_emerg","hr_last_emerg","temp_last_emerg","glu_last_emerg","sat_02#_last_emerg","bp_max_last_emerg","bp_min_last_emerg","icu_days")
+                                    ,missing = T
+                                    ,minMax = F))
+
+table1strat_printed<-as.data.frame(print(table1strat
+                                    , nonnormal = c('age',"temp_first_emerg","hr_first_emerg","glu_first_emerg","sat_02_first_emerg","bp_max_first_emerg","bp_min_first_emerg","hr_last_emerg","temp_last_emerg","glu_last_emerg","sat_02#_last_emerg","bp_max_last_emerg","bp_min_last_emerg","icu_days")
+                                    ,missing = F
+                                    ,minMax = F))
+
+table1_final<-cbind(table1_printed,table1strat_printed)
+table1_final$Missing_N<-round((as.numeric(table1_final['n',]$Overall)*as.numeric(table1_final$Missing))/100,0)
+
+table1_final<-table1_final%>%rename(Missing_pct=Missing)
+
+#table1_final
+write.xlsx(as.data.frame(print(table1_final)), paste("covid_dsl_table1_final_", Sys.Date(),".xlsx",sep=''))
+```
+
+# Table 2: ICD
+
+## Data extraction
+
+```{r}
+hosp_adm_icd<-run_query(getSQL('../sql/hosp_adm_icd_v3.sql'))
+er_adm_icd<-run_query(getSQL('../sql/er_adm_icd_v3.sql'))
+```
+
+## Selecting top ICD
+
+```{r}
+top_hosp_adm_icd<-as.data.frame(table(hosp_adm_icd$abbrev_desc))
+top_hosp_adm_icd<-top_hosp_adm_icd[order(top_hosp_adm_icd$Freq,decreasing = T),]
+print(top_hosp_adm_icd)
+
+# selecting only top5, pull converts dataframe into array
+top_hosp_adm_icd<-pull(top_hosp_adm_icd %>% top_n(wt =Freq,n = 5)%>%select(Var1))
+```
+
+```{r}
+top_er_adm_icd<-as.data.frame(table(er_adm_icd$abbrev_desc))
+top_er_adm_icd<-top_er_adm_icd[order(top_er_adm_icd$Freq,decreasing = T),]
+print(top_er_adm_icd)
+
+# selecting only top5, pull converts dataframe into array
+top_er_adm_icd<-pull(top_er_adm_icd %>% top_n(wt =Freq,n = 5)%>%select(Var1)) 
+```
+
+## Table 2A generation
+
+ICD hosp table
+
+```{r}
+contvars<-c("")
+
+catvars<-c("abbrev_desc")
+
+allvars<-c(contvars,catvars)
+
+statifyby<-'destin_discharge'
+
+table1 <- CreateTableOne(vars = allvars
+                         , data = hosp_adm_icd%>%filter(abbrev_desc %in% top_hosp_adm_icd)
+                         , factorVars = catvars
+                         )
+
+table1strat <- CreateTableOne(
+                           vars = allvars
+                         , data = hosp_adm_icd%>%filter(abbrev_desc %in% top_hosp_adm_icd)
+                         , factorVars = catvars
+                         , testNormal=oneway.test 
+                         , strata = statifyby
+                         , smd = TRUE
+                         )
+table1_printed<-as.data.frame(print(table1
+                                    ,missing = T
+                                    ,minMax = F
+
+                                    ))
+table1strat_printed<-as.data.frame(print(table1strat
+                                    ,missing = F
+                                    ,minMax = F))
+
+table1_final<-cbind(table1_printed,table1strat_printed)
+table1_final$Missing_N<-round((as.numeric(table1_final['n',]$Overall)*as.numeric(table1_final$Missing))/100,0)
+
+table1_final<-table1_final%>%rename(Missing_pct=Missing)
+
+table1_final
+write.xlsx(as.data.frame(print(table1_final)), paste("covid_dsl_table2a_final_", Sys.Date(),".xlsx",sep=''))
+```
+
+## Table 2B generation
+
+ICD hosp table
+
+```{r}
+contvars<-c("")
+
+catvars<-c("abbrev_desc")
+
+allvars<-c(contvars,catvars)
+
+statifyby<-'destin_discharge'
+
+table1 <- CreateTableOne(vars = allvars
+                         , data = er_adm_icd%>%filter(abbrev_desc %in% top_er_adm_icd)
+                         , factorVars = catvars
+                         ) 
+
+table1strat <- CreateTableOne(vars = allvars
+                         , data = er_adm_icd%>%filter(abbrev_desc %in% top_er_adm_icd)
+                         , factorVars = catvars
+                         , testNormal=oneway.test 
+                         , strata = statifyby
+                         , smd = TRUE
+                         )
+
+table1_printed<-as.data.frame(print(table1
+                                    ,missing = T
+                                    ,minMax = F
+                                    ))
+table1strat_printed<-as.data.frame(print(table1strat
+                                    ,missing = F
+                                    ,minMax = F))
+
+table1_final<-cbind(table1_printed,table1strat_printed)
+table1_final$Missing_N<-round((as.numeric(table1_final['n',]$Overall)*as.numeric(table1_final$Missing))/100,0)
+
+table1_final<-table1_final%>%rename(Missing_pct=Missing)
+
+table1_final
+write.xlsx(as.data.frame(print(table1_final)), paste("covid_dsl_table2b_final_", Sys.Date(),".xlsx",sep=''))
+```
+
+# Table 3 Comorbidities
+
+## Data extraction
+
+```{r}
+comorbidities_hosp_adm<-run_query(getSQL('../sql/comorbidities_hosp_adm_v3.sql'))
+```
+
+## Table 3 generation
+
+Demographic table
+
+```{r}
+contvars<-c()
+
+catvars<-c("pmhx_diabetes","pmhx_hld","pmhx_htn","pmhx_ihd","pmhx_ckd","pmhx_copd","pmhx_asthma","pmhx_activecancer","pmhx_chronicliver","pmhx_stroke")
+
+allvars<-c(contvars,catvars)
+
+#statifyby<-'destin_discharge'
+
+table1 <- CreateTableOne(vars = allvars, data = comorbidities_hosp_adm, factorVars = catvars)
+table1_printed<-as.data.frame(print(table1
+                                    ,missing = T
+                                    ,minMax = F
+                                    ))
+
+table1_printed$Missing_N<-round((as.numeric(table1_printed['n',]$Overall)*as.numeric(table1_printed$Missing))/100,0)
+
+table1_printed<-table1_printed%>%rename(Missing_pct=Missing)
+
+table1_printed
+write.xlsx(as.data.frame(print(table1_printed)), paste("covid_dsl_table3_", Sys.Date(),".xlsx",sep=''))
+```

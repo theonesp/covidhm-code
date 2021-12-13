@@ -1,0 +1,144 @@
+---
+title: "Code Used to create tables in the COVID DSL v3 manuscript"
+author: Miguel Ángel Armengol de la Hoz / Jesús Villar Fernández
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  html_notebook:
+    code_folding: hide
+    number_sections: yes
+    theme: flatly
+    toc: yes
+    toc_float: yes
+
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_file = paste0(substr(inputFile,1,nchar(inputFile)-4)," ",Sys.Date(),'.html')) })
+---
+
+# Environment
+
+## Libraries
+
+```{r message=FALSE, warning=FALSE}
+library(summarytools)
+library(RPostgreSQL)
+library(tidyverse)
+library(stringr)
+library(ggplot2)
+library(tableone)
+library(plotly)
+library(readxl)
+library(xlsx)
+library(scales)
+library(reshape2)
+```
+
+## Database connection
+
+This notebook requires the database and schema available in the github [COVID HM Hospitales Code Repository](https://github.com/theonesp/covidhm-code/) to be be deployed to be able to run the following code.
+
+### Drivers
+
+```{r}
+#install.packages("RPostgreSQL")
+
+# Load configuration settings
+dbdriver <- 'PostgreSQL'
+host  <- 'localhost'
+port  <- '45432'
+user  <- 'postgres'
+password <- 'Baba0805'
+dbname <- 'covidhm'
+schema <- 'covidhm_dsl_v3'
+encoding  <- 'latin1'
+
+# Connect to the database using the configuration settings
+con <- dbConnect(dbDriver(dbdriver), dbname = dbname, host = host, port = port, 
+                 user = user, password = password)
+rm(password) # removes the password
+
+
+# Set the default schema
+dbExecute(con, paste("SET search_path TO ", schema, sep=" "))
+
+# WARNING: accents presents in the table need special encoding
+
+dbGetQuery(con, "SET client_encoding = 'LATIN1'")
+
+dbGetQuery(con, "SHOW CLIENT_ENCODING")
+```
+
+## Creating useful query functions
+
+```{r}
+# function avoiding add the connection data in each iteration
+run_query<-function(query){
+query_output<-dbGetQuery(con,query)
+  return(query_output)
+}
+
+# function for reading sql files
+getSQL <- function(filepath){
+  con = file(filepath, "r")
+  sql.string <- ""
+
+  while (TRUE){
+    line <- readLines(con, n = 1)
+
+    if ( length(line) == 0 ){
+      break
+    }
+
+    line <- gsub("\\t", " ", line)
+
+    if(grepl("--",line) == TRUE){
+      line <- paste(sub("--","/*",line),"*/")
+    }
+
+    sql.string <- paste(sql.string, line)
+  }
+
+  close(con)
+  return(sql.string)
+}
+```
+
+# Patient characteristics
+
+## Data extraction
+
+```{r}
+vitals_one_patient<-run_query(getSQL('../sql/vitals_one_patient_v3.sql'))
+```
+
+## Figure 1
+
+Example usage
+
+```{r}
+vitals_one_patient_for_plot<-vitals_one_patient
+# we create a time stamp from date and time
+vitals_one_patient_for_plot$timestamp<-paste(vitals_one_patient_for_plot$constants_ing_date,vitals_one_patient_for_plot$constants_ing_time,sep = ' ')
+# we cast the string into posixct
+vitals_one_patient_for_plot$timestamp<-as.POSIXct(vitals_one_patient_for_plot$timestamp,format="%Y-%m-%d %H:%M:%S")
+
+vitals_one_patient_for_plot[vitals_one_patient_for_plot==0]<-NA
+
+# we want to plot only the first 
+vitals_one_patient_for_plot<-vitals_one_patient_for_plot%>%filter(timestamp<='2020-04-17 00:52:00')
+vitals_one_patient_for_plot_melt <- melt(vitals_one_patient_for_plot%>%select(patient_id,timestamp,bp_max_ing,bp_min_ing,temp_ing,hr_ing,sat_02_ing,glu_ing),id.vars = c("patient_id","timestamp") )
+
+vitals_one_patient_for_plot_melt%>%
+ggplot() + 
+  geom_point(aes(x=timestamp, y = value,color=variable))+
+    scale_colour_manual(name = "Vital Signs"
+                        
+                       , labels = c('SBP max (mmHg)','SBP min (mmHg)','Temperature (°C)','HR (BPM)','Saturation O₂ (%)','Glucose (mg/dL)')
+                       ,values = c("#ef5350", "#651fff","#26a69a","#ffc400","#1e88e5","#f48fb1")
+                       )+  
+  scale_x_datetime(breaks = date_breaks("24 hours"), labels = date_format("%m-%d %H:%M"))+
+  theme_minimal()+
+  ylab('Value')+
+  xlab('Time')+ 
+  theme(axis.text.x = element_text(angle = 90))
+
+#ggsave(paste('figure1_',Sys.Date(),'.tiff',sep=''),device = 'tiff')
+```
