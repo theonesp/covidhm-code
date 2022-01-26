@@ -1,4 +1,4 @@
-# COVID HM Hospitales Code Repository
+# COVID HM Hospitales Code Repository v2
 
 covidhm Code Repository: Code shared by the research community for the covidhm database. To find out more about covidhm db, please see: [Covid Data Save Lives - HM Hospitales webpage](https://www.hmhospitales.com/coronavirus/covid-data-save-lives/english-version).
 
