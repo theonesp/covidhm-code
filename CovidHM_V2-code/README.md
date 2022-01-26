@@ -6,4 +6,4 @@ This repository was created based on the [MIMIC Code Repository](https://github.
 
 ## Database structure
 
-![Diagram covidhm](https://github.com/theonesp/covidhm-code/blob/master/img/covidhm_diagram.jpg)
+![Diagram covidhm](https://github.com/theonesp/covidhm-code/blob/master/CovidHM_V2-code/img/covidhm_diagram.jpg)
