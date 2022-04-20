@@ -3,7 +3,7 @@ covidhm Code Repository: Code shared by the research community for the covidhm V
 
 This repository was created based on the MIMIC Code Repository.
 
-This repository will include Predictive tasks over covidhm V3 data.
+This repository will include Predictive tasks evaluation over covidhm V3 data.
 
 ## Database structure
 ![Diagram covidhm](https://github.com/jefevi/CovidDataPrediction/blob/main/img/covidhm_dsl_v3_diagram.png)
