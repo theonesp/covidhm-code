@@ -111,7 +111,8 @@ Patient characteristics.
 ## Data extraction
 
 ```{r}
-patient<-run_query(getSQL('../sql/patient_v3.sql'))
+#patient<-run_query(getSQL('../sql/patient_v3.sql'))
+patient<-run_query(getSQL('../sql/patient_survived_collapsed_v3.sql'))
 ```
 
 ## Table 1 generation
@@ -161,8 +162,11 @@ write.xlsx(as.data.frame(print(table1_final)), paste("covid_dsl_table1_final_", 
 ## Data extraction
 
 ```{r}
-hosp_adm_icd<-run_query(getSQL('../sql/hosp_adm_icd_v3.sql'))
-er_adm_icd<-run_query(getSQL('../sql/er_adm_icd_v3.sql'))
+#hosp_adm_icd<-run_query(getSQL('../sql/hosp_adm_icd_v3.sql'))
+#er_adm_icd<-run_query(getSQL('../sql/er_adm_icd_v3.sql'))
+
+hosp_adm_icd<-run_query(getSQL('../sql/hosp_adm_icd_survived_collapsed_v3.sql'))
+er_adm_icd<-run_query(getSQL('../sql/er_adm_icd_survived_collapsed_v3.sql'))
 ```
 
 ## Selecting top ICD
