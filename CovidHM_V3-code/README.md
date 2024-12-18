@@ -5,5 +5,7 @@ This repository was created based on the [MIMIC Code Repository](https://github.
 
 This repository will include Predictive tasks evaluation over covidhm V3 data.
 
+CDSL V3 is an older version that does not meet HIPAA requirements for patient privacy. The latest version, titled "COVID Data for Shared Learning (CDSL)" is available in Physionet's repository. 
+
 ## Database structure
 ![Diagram covidhm](https://github.com/jefevi/CovidDataPrediction/blob/main/img/covidhm_dsl_v3_diagram.png)
