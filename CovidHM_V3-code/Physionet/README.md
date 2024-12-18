@@ -8,3 +8,4 @@
  CDSL database 1.0.0 comprises the following tabular data: patient, diagnosis_er, diagnosis_hosp, vital_signs, medication and lab from a total of 4,479 hospitalized patients with confirmed or suspected COVID-19, along with 1,444,764 radiology images and relevant metadata, specifically 4,608 radiographs and 1,440,156 CT scans.   
 
 For more detailed information and to request access to Physionet's CDSL, please see: 
+[COVID Data for Shared Learning (CDSL): A comprehensive, multimodal COVID-19 dataset from HM Hospitales](https://doi.org/10.13026/85z8-jq92)
